@@ -341,6 +341,9 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
 
                 }
                 if (hasMethodValueOf){
+                    if (setTypeText.contains(".")){
+                        setTypeText = setTypeText.substring(setTypeText.lastIndexOf(".")+1);
+                    }
                     return startText + setTypeText + ".valueOf("+getMethodText+"));";
                 }
             }

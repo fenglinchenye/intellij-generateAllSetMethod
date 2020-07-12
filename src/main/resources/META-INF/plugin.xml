@@ -1,28 +1,36 @@
 <idea-plugin version="2">
     <id>com.bruce.intellijplugin.generatesetter</id>
     <name>GenerateAllSetter</name>
-    <vendor email="gejun123456@gmail.com" url="https://github.com/gejun123456/intellij-generateAllSetMethod">bruceGe</vendor>
+    <vendor email="gejun123456@gmail.com" url="https://github.com/gejun123456/intellij-generateAllSetMethod">bruceGe
+    </vendor>
     <description><![CDATA[
 
     <p><a href="https://github.com/gejun123456/intellij-generateAllSetMethod">GitHub</a>
       |&nbsp<a href="https://github.com/gejun123456/intellij-generateAllSetMethod/issues">Issues</a></p>
-      <p> 一键调用一个对象的所有的set方法</p>
+      <p>一键调用setter 方法并赋值</p>
       <p> generate call to class all setter method by alt+enter on the variable class</p>
       <p> generate a converter two object when they have same field</p>
       <p> generate default value when returnType is List Set Map </p>
       <p> generate call to assertThat on all getter method
-      <p> like a user class has setName, setPassword methods</p>
-      <p> <b>User</b> user = new User();</p>
-      <p> then alt+enter on User</p>
-      <p> will generate following</p>
-      <p> user.setName("");</p>
-      <p> user.setPassword("");</p>
-      <p> support all your class set method including super class</p>
-      <p> support kotlin
+      <p> like a student class has setName, setPassword methods</p>
+      <p>private Student buildStudent(String id,Teacher t, School s, String idCardNo) {</p>
+      <p>        Student student = new Student();</p>
+<p>        student.setId(java.lang.Long.val</p>ueOf(id));</p>
+<p>        student.setName();</p>
+<p>        student.setAge(t.g</p>etAge());</p>
+<p>        student.setSchoolN</p>ame(s.getName());</p>
+<p>        student.setAddress</p>();</p>
+<p>        student.setIdCardN</p>o(i</p>dCardNo);</p>
+<p>        return student;</p>
+<p>    }</p>
       <p> view more on <a href ="https://github.com/gejun123456/intellij-generateAllSetMethod">https://github.com/gejun123456/intellij-generateAllSetMethod</a></p>
     ]]></description>
 
     <change-notes><![CDATA[
+        <strong>2.6</strong>
+        <ul>
+            <li>[NEW]multi param support</li>
+        </ul>
         <strong>2.5</strong>
         <ul>
             <li>[NEW]compatible for 2020 version</li>
