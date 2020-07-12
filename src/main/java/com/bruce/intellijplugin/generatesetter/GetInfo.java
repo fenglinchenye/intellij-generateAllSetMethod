@@ -19,10 +19,10 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 
 import com.intellij.psi.PsiType;
+import com.intellij.psi.util.PsiTypesUtil;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.jetbrains.kotlin.j2k.ast.Object;
 
 /**
  * @Author bruce.ge
@@ -40,7 +40,7 @@ public class GetInfo {
 
     private List<PsiMethod> getMethods;
 
-    private Map<String,PsiMethod> nameToMethodMap;
+    private Map<String, PsiMethod> nameToMethodMap;
 
     public Map<String, PsiMethod> getNameToMethodMap() {
         return nameToMethodMap;
@@ -50,15 +50,14 @@ public class GetInfo {
      * 是否是 以类型为前缀的属性
      * 如果是则需要去除
      * 否直接查询
-     * @param param
-     * @return
      */
-    public PsiMethod getPsiMethodByParamName(String param){
-        if (Objects.isNull(param) || param.isEmpty()){
+    public PsiMethod getPsiMethodByParamName(String param) {
+        // 当前类型是java类型的参数或参数为空时
+        if (isJavaObject()||Objects.isNull(param) || param.isEmpty()) {
             return null;
         }
         String str = firstLowCaseParamType();
-        if (param.startsWith(str)&&param.length()>str.length()){
+        if (param.startsWith(str) && param.length() > str.length()) {
             String realParamName = StringUtils.firstLowCase(param.substring(str.length()));
             return nameToMethodMap.get(realParamName);
         }
@@ -93,11 +92,24 @@ public class GetInfo {
         this.paramType = paramType;
     }
 
-    public String getStrParamType(){
+    public String getStrParamType() {
         return paramType.getPresentableText();
     }
 
-    public String firstLowCaseParamType(){
+    public String firstLowCaseParamType() {
         return StringUtils.firstLowCase(getStrParamType());
+    }
+
+    /**
+     * 是java 对象类型或基本类型
+     * @return
+     */
+    public boolean isJavaObject() {
+        // 包括基本类型 & java 包下的对象
+        PsiClass parameterClass = PsiTypesUtil.getPsiClass(paramType);
+        if (parameterClass == null || parameterClass.getQualifiedName().startsWith("java.")) {
+            return true;
+        }
+        return false;
     }
 }

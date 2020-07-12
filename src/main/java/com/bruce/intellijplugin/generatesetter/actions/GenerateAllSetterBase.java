@@ -137,6 +137,19 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
         }
     };
 
+    public static Map<String, String> BASE_TYPE_TO_OBJECT_TYPE = new HashMap<String, String>() {
+        {
+            put("boolean", "java.lang.Boolean");
+            put("int", "java.lang.Integer");
+            put("byte", "java.lang.Byte");
+            put("long", "java.lang.Long");
+            put("short", "java.lang.Short");
+            put("float", "java.lang.Float");
+            put("double", "java.lang.Double");
+            put("char", "java.lang.Character");
+        }
+    };
+
     @Override
     public void invoke(@NotNull Project project, Editor editor,
                        @NotNull PsiElement element) throws IncorrectOperationException {
@@ -211,13 +224,12 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
             for (PsiParameter parameter : parameters) {
                 PsiType type = parameter.getType();
                 PsiClass parameterClass = PsiTypesUtil.getPsiClass(type);
-                if (parameterClass == null || parameterClass.getQualifiedName()
-                        .startsWith("java.")) {
-                    // 加入GetInfo
-                    // GetInfo 支持
-
-
-                    continue;
+                if (parameterClass == null || parameterClass.getQualifiedName().startsWith("java.")) {
+                    // GetInfo 支持基本类型
+                    GetInfo info = new GetInfo();
+                    info.setParamName(parameter.getName());
+                    info.setParamType(type);
+                    infoList.add(info);
                 } else {
                     List<PsiMethod> getMethods = PsiClassUtils
                             .extractGetMethod(parameterClass);
@@ -234,6 +246,7 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
         String insertText = splitText + psiClass.getName() + " " + generateName
                 + " = new " + psiClass.getName() + "();";
 
+        // 构建类型
         RecommendGetInfo recommendGetInfo = buildRecommendInfoGetInfo(infoList,methods);
 
         if (infoList.size()==0) {
@@ -264,29 +277,25 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
         StringBuilder builder = new StringBuilder();
         builder.append(splitText);
         for (PsiMethod method : methodList) {
-            if (method.getName().startsWith(SET)) {
+            if (method.getName().startsWith(SET)&&method.getParameterList().getParametersCount()==1) {
                 String fieldToLower = com.bruce.intellijplugin.generatesetter.utils.StringUtils.firstLowCase(method.getName().substring(3));
                 GetInfo info = recommendInfo.recommendBySetMethod(method);
                 PsiMethod s = null;
                 if (info != null) {
                     s = info.getPsiMethodByParamName(fieldToLower);
                 }
-                if (s != null) {
+                if (s != null || (info!=null && info.isJavaObject())) {
                     // TODO: 2017/8/2 check the get method return type and set
                     // method param type.
-                    if (method.getParameterList().getParameters().length == 1) {
-                        PsiParameter psiParameter = method.getParameterList()
-                            .getParameters()[0];
+                    if (method.getParameterList().getParametersCount() == 1) {
+                        PsiParameter psiParameter = method.getParameterList().getParameter(0);
                         PsiType type = psiParameter.getType();
-                        PsiType returnType = s.getReturnType();
+                        PsiType returnType = info.isJavaObject()?info.getParamType():s.getReturnType();
                         String setTypeText = type.getCanonicalText();
                         String getTypeText = returnType.getCanonicalText();
-                        String getMethodText = info.getParamName() + "."
-                            + s.getName() + "()";
-                        String startText = generateName + "." + method.getName()
-                            + "(";
-                        builder.append(generateSetterString(setTypeText,
-                            getTypeText, getMethodText, startText));
+                        String getMethodText = info.isJavaObject()?info.getParamName():info.getParamName() + "." + s.getName() + "()";
+                        String startText = generateName + "." + method.getName() + "(";
+                        builder.append(generateSetterString(setTypeText, getTypeText, getMethodText, startText));
                     }
                 } else {
                     generateDefaultForOneMethod(generateName, newImportList,
@@ -317,6 +326,23 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
             } else if (checkMethodIsLong(setTypeText)
                     && getTypeText.equals("java.sql.Timestamp")) {
                 return startText + getMethodText + ".getTime());";
+            } else {
+                // 其他使用valueOf() 做类型转换工具
+                // 根据反射调用
+                String setWrapperType = BASE_TYPE_TO_OBJECT_TYPE.getOrDefault(setTypeText,setTypeText);
+                String getWrapperType = BASE_TYPE_TO_OBJECT_TYPE.getOrDefault(getTypeText,getTypeText);
+                boolean hasMethodValueOf = false;
+                try{
+                    Class<?> setClass = Class.forName(setWrapperType);
+                    Class<?> getClass = Class.forName(getWrapperType);
+                    hasMethodValueOf = Objects.nonNull(setClass)&&Objects.nonNull(getClass)
+                        && Objects.nonNull(setClass.getMethod("valueOf",getClass));
+                } catch (Exception ex){
+
+                }
+                if (hasMethodValueOf){
+                    return startText + setTypeText + ".valueOf("+getMethodText+"));";
+                }
             }
         }
         return startText + getMethodText + ");";
