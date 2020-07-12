@@ -17,6 +17,7 @@ package com.bruce.intellijplugin.generatesetter.actions;
 import com.bruce.intellijplugin.generatesetter.CommonConstants;
 import com.bruce.intellijplugin.generatesetter.GetInfo;
 import com.bruce.intellijplugin.generatesetter.Parameters;
+import com.bruce.intellijplugin.generatesetter.RecommendGetInfo;
 import com.bruce.intellijplugin.generatesetter.complexreturntype.*;
 import com.bruce.intellijplugin.generatesetter.utils.PsiClassUtils;
 import com.bruce.intellijplugin.generatesetter.utils.PsiDocumentUtils;
@@ -32,6 +33,7 @@ import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.util.IncorrectOperationException;
+import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -44,6 +46,7 @@ import java.util.*;
 public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionAction {
     public static final String IS = "is";
     public static final String GET = "get";
+    public static final String SET = "set";
     private final GenerateAllHandler generateAllHandler;
 
     public GenerateAllSetterBase(GenerateAllHandler generateAllHandler) {
@@ -203,13 +206,17 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
         List<PsiMethod> methods = PsiClassUtils.extractSetMethods(psiClass);
         Set<String> importList = Sets.newHashSet();
         String generateName = PsiToolUtils.lowerStart(psiClass.getName());
-        GetInfo info = null;
+        List<GetInfo> infoList = new ArrayList<>(parameters.length);
         if (parameters.length > 0) {
             for (PsiParameter parameter : parameters) {
                 PsiType type = parameter.getType();
                 PsiClass parameterClass = PsiTypesUtil.getPsiClass(type);
                 if (parameterClass == null || parameterClass.getQualifiedName()
                         .startsWith("java.")) {
+                    // 加入GetInfo
+                    // GetInfo 支持
+
+
                     continue;
                 } else {
                     List<PsiMethod> getMethods = PsiClassUtils
@@ -217,8 +224,8 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
                     // TODO: 2017/1/20 may be i can extract get memthod from all
                     // parameter
                     if (getMethods.size() > 0) {
-                        info = buildInfo(parameter, getMethods);
-                        break;
+                        GetInfo getInfo = buildInfo(parameter, getMethods);
+                        infoList.add(getInfo);
                     }
                 }
             }
@@ -226,12 +233,15 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
         // TODO: 2017/8/2 what if two class has the same name
         String insertText = splitText + psiClass.getName() + " " + generateName
                 + " = new " + psiClass.getName() + "();";
-        if (info == null) {
+
+        RecommendGetInfo recommendGetInfo = buildRecommendInfoGetInfo(infoList,methods);
+
+        if (infoList.size()==0) {
             insertText += generateStringForNoParam(generateName, methods,
                     splitText, importList, hasGuava);
         } else {
             insertText += generateStringForParam(generateName, methods,
-                    splitText, importList, hasGuava, info);
+                    splitText, importList, hasGuava,recommendGetInfo);
         }
         insertText += "return " + generateName + ";";
         dto.setAddedText(insertText);
@@ -239,36 +249,48 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
         return dto;
     }
 
+    private RecommendGetInfo buildRecommendInfoGetInfo(List<GetInfo> infoList, List<PsiMethod> methods) {
+        List<String> fieldNameList = methods.parallelStream()
+            .filter(method -> method.getName().startsWith(SET))
+            .map(method -> method.getName().substring(3))
+            .map(com.bruce.intellijplugin.generatesetter.utils.StringUtils::firstLowCase)
+            .collect(Collectors.toList());
+        return RecommendGetInfo.build(infoList,fieldNameList);
+    }
+
     private String generateStringForParam(String generateName,
                                           List<PsiMethod> methodList, String splitText,
-                                          Set<String> newImportList, boolean hasGuava, GetInfo info) {
+                                          Set<String> newImportList, boolean hasGuava, RecommendGetInfo recommendInfo) {
         StringBuilder builder = new StringBuilder();
         builder.append(splitText);
         for (PsiMethod method : methodList) {
-            if (method.getName().startsWith("set")) {
-                String fieldToLower = method.getName().substring(3)
-                        .toLowerCase();
-                PsiMethod s = info.getNameToMethodMap().get(fieldToLower);
+            if (method.getName().startsWith(SET)) {
+                String fieldToLower = com.bruce.intellijplugin.generatesetter.utils.StringUtils.firstLowCase(method.getName().substring(3));
+                GetInfo info = recommendInfo.recommendBySetMethod(method);
+                PsiMethod s = null;
+                if (info != null) {
+                    s = info.getPsiMethodByParamName(fieldToLower);
+                }
                 if (s != null) {
                     // TODO: 2017/8/2 check the get method return type and set
                     // method param type.
                     if (method.getParameterList().getParameters().length == 1) {
                         PsiParameter psiParameter = method.getParameterList()
-                                .getParameters()[0];
+                            .getParameters()[0];
                         PsiType type = psiParameter.getType();
                         PsiType returnType = s.getReturnType();
                         String setTypeText = type.getCanonicalText();
                         String getTypeText = returnType.getCanonicalText();
                         String getMethodText = info.getParamName() + "."
-                                + s.getName() + "()";
+                            + s.getName() + "()";
                         String startText = generateName + "." + method.getName()
-                                + "(";
+                            + "(";
                         builder.append(generateSetterString(setTypeText,
-                                getTypeText, getMethodText, startText));
+                            getTypeText, getMethodText, startText));
                     }
                 } else {
                     generateDefaultForOneMethod(generateName, newImportList,
-                            hasGuava, builder, method);
+                        hasGuava, builder, method);
                 }
             }
             builder.append(splitText);
@@ -316,15 +338,19 @@ public abstract class GenerateAllSetterBase extends PsiElementBaseIntentionActio
         for (PsiMethod getMethod : getMethods) {
             if (getMethod.getName().startsWith(IS)) {
                 nameToMethodMaps.put(
-                        getMethod.getName().substring(2).toLowerCase(),
+                    com.bruce.intellijplugin.generatesetter.utils.StringUtils.firstLowCase(getMethod.getName().substring(2)),
                         getMethod);
             } else if (getMethod.getName().startsWith(GET)) {
                 nameToMethodMaps.put(
-                        getMethod.getName().substring(3).toLowerCase(),
+                    com.bruce.intellijplugin.generatesetter.utils.StringUtils.firstLowCase(getMethod.getName().substring(3)),
                         getMethod);
             }
         }
         info.setNameToMethodMap(nameToMethodMaps);
+
+        PsiType type = parameter.getType();
+        info.setParamType(type);
+
         return info;
     }
 

@@ -14,10 +14,15 @@
 
 package com.bruce.intellijplugin.generatesetter;
 
+import com.bruce.intellijplugin.generatesetter.utils.StringUtils;
+import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 
+import com.intellij.psi.PsiType;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jetbrains.kotlin.j2k.ast.Object;
 
 /**
  * @Author bruce.ge
@@ -25,16 +30,39 @@ import java.util.Map;
  * @Description
  */
 public class GetInfo {
+
+    /**
+     * 参数类型
+     */
+    private PsiType paramType;
+
     private String paramName;
 
     private List<PsiMethod> getMethods;
 
-
     private Map<String,PsiMethod> nameToMethodMap;
-
 
     public Map<String, PsiMethod> getNameToMethodMap() {
         return nameToMethodMap;
+    }
+
+    /**
+     * 是否是 以类型为前缀的属性
+     * 如果是则需要去除
+     * 否直接查询
+     * @param param
+     * @return
+     */
+    public PsiMethod getPsiMethodByParamName(String param){
+        if (Objects.isNull(param) || param.isEmpty()){
+            return null;
+        }
+        String str = firstLowCaseParamType();
+        if (param.startsWith(str)&&param.length()>str.length()){
+            String realParamName = StringUtils.firstLowCase(param.substring(str.length()));
+            return nameToMethodMap.get(realParamName);
+        }
+        return nameToMethodMap.get(param);
     }
 
     public void setNameToMethodMap(Map<String, PsiMethod> nameToMethodMap) {
@@ -55,5 +83,21 @@ public class GetInfo {
 
     public void setGetMethods(List<PsiMethod> getMethods) {
         this.getMethods = getMethods;
+    }
+
+    public PsiType getParamType() {
+        return paramType;
+    }
+
+    public void setParamType(PsiType paramType) {
+        this.paramType = paramType;
+    }
+
+    public String getStrParamType(){
+        return paramType.getPresentableText();
+    }
+
+    public String firstLowCaseParamType(){
+        return StringUtils.firstLowCase(getStrParamType());
     }
 }
